@@ -1,3 +1,4 @@
+; vim: set tabstop=8
 ; z80dasm 1.1.3
 ; command line: z80dasm -atl -b boot_eprom.blk -g 0x8000 -o boot_eprom.asm boot_eprom.bin
 
