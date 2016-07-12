@@ -1,59 +1,63 @@
 ; vim: set tabstop=8
 ; z80dasm 1.1.3
-; command line: z80dasm -atl -b boot_eprom.blk -g 0x8000 -o boot_eprom.asm boot_eprom.bin
+; command line: z80dasm -atl -b boot_eprom.blk -g 0x8000 -o boot_eprom.asm ../bin/boot_eprom.bin
 
 	org	08000h
 
 l8000h:
 	ld sp,00002h		;8000	31 02 00 
 l8003h:
-	push af			;8003	f5 	
+	push af			;8003	f5         SP = 0x0000	
 	ld iy,00000h		;8004	fd 21 00 00
 	add iy,sp		;8008	fd 39 
 	ld a,0fch		;800a	3e fc      Select PROM memory
 	out (0a2h),a		;800c	d3 a2      Map PROM into 3rd memory page (0x8000)
 	jp l8011h		;800e	c3 11 80
 l8011h:
-	di			;8011	f3 
+	di			;8011	f3         Disable interrupts
 l8012h:
-	ld a,028h		;8012	3e 28           Blank display | Acquire mode 
-	out (0f8h),a		;8014	d3 f8           Set IOC register 	
+	ld a,028h		;8012	3e 28      
+	out (0f8h),a		;8014	d3 f8      Set IOC <- 00101000
+                                                   ; xx1xxxxx -> Blank display
+                                                   ; xxxx1xxx -> Acquire mode
+                                                   ; xxxxx000 -> Show sector
 	xor a			;8016	af 
 l8017h:
 	ex (sp),hl		;8017	e3 	
-	djnz l8017h		;8018	10 fd           Weird loop here? 
+	djnz l8017h		;8018	10 fd      Just a delay?
 	dec a			;801a	3d 	 
-	jr nz,l8017h		;801b	20 fa           Loop on 256 values. Delay?? 	
+	jr nz,l8017h		;801b	20 fa      Loop on 256 values. Delay?? 	
 	ld bc,00fa0h		;801d	01 a0 0f          	
-	ld a,03fh		;8020	3e 3f           3F (00111111): 
-                                                        ;Change all-caps  	
-                                                        ;Remove Acquire mode
-                                                        ;Keyboard reset
-                                                        ;Blank display
-	out (0f8h),a		;8022	d3 f8           Set IOC register	
+	ld a,03fh		;8020	3e 3f      3F (00111111): 
+                                                   ; xx1xxxxx -> Blank display
+                                                   ; xxx1xxxx -> I/O reset
+                                                   ; xxxx1xxx -> Acquire mode
+                                                   ; xxxxx111 -> Toggle all-caps
+	out (0f8h),a		;8022	d3 f8      Set IOC register	
 l8024h:
-	in a,(0e0h)		;8024	db e0           Read SR1
-	and 008h		;8026	e6 08           Check NMI 
-	jr nz,l8012h		;8028	20 e8           Repeat if no NMI
+	in a,(0e0h)		;8024	db e0     Read SR1
+	and 008h		;8026	e6 08     Check NMI (zero if present) 
+	jr nz,l8012h		;8028	20 e8     Repeat if no NMI
 	dec bc			;802a	0b 	 
 	ld a,b			;802b	78 	 
 	or c			;802c	b1 	         
-	jr nz,l8024h		;802d	20 f5 	        Try 4000 (0x0fa0) times 
-	out (0c0h),a		;802f	d3 c0 	        Undocumented port
+	jr nz,l8024h		;802d	20 f5 	  Try 4000 (0x0fa0) times 
+
+	out (0c0h),a		;802f	d3 c0 	  Clear NMI to Z80
 	in a,(073h)		;8031	db 73 	        Read Board 3 ID
 	and 0f8h		;8033	e6 f8 	
-	sub 0e8h		;8035	d6 e8           Zero with %11101xxx Ids
-                                                        ;May be some internal design
-                                                        ;It doesn't match any known board
+	sub 0e8h		;8035	d6 e8     Zero with %11101xxx Ids
+                                                  ;May be some internal design
+                                                  ;It doesn't match any documented board
 	ld b,a			;8037	47 
 	jr nz,l8054h		;8038	20 1a           With serial board in 
                                                         ;slot 3, jump to 8054h
 ;-------------------------------------------------------
 ;This code seems to be
-;for an unknown board. ID: 11101xxx (0xE80 - 0xEF)
+;for an unknown board. ID: 11101xxx (0xE8 - 0xEF)
  
 	ld a,07eh		;803a	3e 7e
-	ld hl,l814dh		;803c	21 4d 81 	
+	ld hl,serial_data	;803c	21 4d 81 	
 	ld bc,00331h		;803f	01 31 03 	
 	otir	        	;8042	ed b3 	        Out 0x80, 0x80, 0x40 
                                                         ;to IO=0x31
@@ -66,15 +70,15 @@ l804eh:
 	djnz l804eh		;804e	10 fe 	
 	in a,(030h)		;8050	db 30 	
 	in a,(030h)		;8052	db 30 
-        ;------------------------------------------------------
+;------------------------------------------------------
 l8054h:
-	in a,(083h)		;8054	db 83 	WTF! Actually an out register
+	in a,(083h)		;8054	db 83 	   Beep!
 	ld hl,00000h		;8056	21 00 00 	
 	add hl,sp		;8059	39 	
 	ld a,h			;805a	7c 	 
-	or l			;805b	b5 	 SP == 0? 
+	or l			;805b	b5 	   SP == 0? 
 	jp nz,l815eh		;805c	c2 5e 81 
-	jp l8fe0h		;805f	c3 e0 8f 
+	jp l8fe0h		;805f	c3 e0 8f   -> Startup case(SP=0) 
 	nop			;8062	00 	 
 	nop			;8063	00 	 
 	nop			;8064	00 	 
@@ -84,13 +88,10 @@ l8054h:
 	nop			;8068	00 	
 	jr l8003h		;8069	18 98 	. . 
 sub_806bh:
-	cp 00bh		;806b	fe 0b 	. . 
+	cp 00bh		        ;806b	fe 0b 	. . 
 	ret nc			;806d	d0 	. 
 	ld d,a			;806e	57 	W 
 l806fh:
-    #include <sys/types.h>
-	     #include <sys/uio.h>
-	     #include <unistd.h>
 	call sub_8078h		;806f	cd 78 80 	. x . 
 	ret nc			;8072	d0 	. 
 	cp d			;8073	ba 	. 
@@ -262,13 +263,14 @@ system_start_msg:
 	defb 04dh		;814b	4d 	M 
 start_message_end:
 	nop			;814c	00 	. 
-l814dh:
-	add a,b			;814d	80 	. 
-	add a,b			;814e	80 	. 
-	ld b,b			;814f	40 	@ 
-	inc c			;8150	0c 	. 
-	djnz l8169h		;8151	10 16 	. . 
-	or a			;8153	b7 	. 
+serial_data:
+        defb 080h               ;814d   80
+        defb 080h               ;814e   80
+        defb 040h               ;814f   40
+        defb 00ch               ;8150   0c
+        defb 010h               ;8151   10
+        defb 016h               ;8152   16
+        defb 0b7h               ;8153   b7
 	djnz $+24		;8154	10 16 	. . 
 	dec b			;8156	05 	. 
 	rst 38h			;8157	ff 	. 
@@ -403,9 +405,9 @@ l8211h:
 	jr l8211h		;8225	18 ea 	. . 
 l8227h:
 	ld hl,0f80ah		;8227	21 0a f8 	! . . 
-	add hl,de			;822a	19 	. 
-	ld a,(hl)			;822b	7e 	~ 
-	cp 0c3h		;822c	fe c3 	. . 
+	add hl,de		;822a	19 	. 
+	ld a,(hl)		;822b	7e 	~ 
+	cp 0c3h		        ;822c	fe c3 	. . 
 	ret nz			;822e	c0 	. 
 	xor a			;822f	af 	. 
 	out (0a0h),a		;8230	d3 a0 	. . 
@@ -414,13 +416,13 @@ l8227h:
 l8235h:
 	in a,(073h)		;8235	db 73 	. s 
 	and 0f8h		;8237	e6 f8 	. . 
-	cp 0f0h		;8239	fe f0 	. . 
+	cp 0f0h		        ;8239	fe f0 	. . 
 	ret nz			;823b	c0 	. 
-	call get_char_echo		;823c	cd 78 8a 	. x . 
+	call get_char_echo	;823c	cd 78 8a 	. x . 
 	cp 00dh		;823f	fe 0d 	. . 
-	ret nz			;8241	c0 	. 
-	ld a,000h		;8242	3e 00 	> . 
-	call sub_8af6h		;8244	cd f6 8a 	. . . 
+	ret nz			;8241	c0 
+	ld a,000h		;8242	3e 00 
+	call serial_send_hdr	;8244	cd f6 8a
 	ld b,004h		;8247	06 04 	. . 
 	ld d,b			;8249	50 	P 
 	otir		;824a	ed b3 	. . 
@@ -701,10 +703,10 @@ l83fbh:
 	ret z			;8407	c8              Try 50 (0x32) times	 
 	jr l83fbh		;8408	18 f1 
 l840ah:
-	ld bc,00010h		;840a	01 10 00 	B = 0, C = 0x10 !!
+	ld bc,00010h		;840a	01 10 00 	B = 0, C = 0x10
 	ld hl,0fc00h		;840d	21 00 fc 	Buffer address = 0xFC00
 	push hl			;8410	e5 	 
-	inir		        ;8411	ed b2 	        Read to FC00, but B == 0, nothing is read! 
+	inir		        ;8411	ed b2 	        Read to FC00, 256 values from card in slot 5
 	ret			;8413	c9 	 
 
 vdriver:
@@ -1598,11 +1600,11 @@ pixel_data:
 l8800h:
 	xor a			;8800	af 	 
 	ld d,a			;8801	57 	 
-	ld e,a			;8802	5f 	 
+	ld e,a			;8802	5f      D = E = A = 0;	Initialize DE, used to flag state 
 	exx			;8803	d9 	Exchange BC, DE, HL
 	in a,(0d0h)		;8804	db d0 	Read Status Register 2
 	and 080h		;8806	e6 80 	Read CommandACK value
-	ld b,a			;8808	47 	Store CommandACK in b 
+	ld b,a			;8808	47 	Store CommandACK in B 
 	ld a,038h		;8809	3e 38 	 
 	out (0f8h),a		;880b	d3 f8   Set IOCR
                                                 ; xx1xxxxx -> Blank display
@@ -1614,7 +1616,7 @@ l880fh:
 	in a,(0d0h)		;880f	db d0   Read Status Register 2	
 	and 080h		;8811	e6 80 	Get CommandACK value
 	xor b			;8813	a8 	Compare with previous value. 
-	jr nz,l881bh		;8814	20 05 	On command performed, to l881bh
+	jr nz,l881bh		;8814	20 05 	On command completion, to l881bh
 	dec c			;8816	0d 	
 	jr nz,l880fh		;8817	20 f6   Else repeat 180 (0xB5) times
 	jr l8823h		;8819	18 08 	If no success, to l8823
@@ -1628,7 +1630,7 @@ l8823h:
 	ld a,d			;8824	7a 	
 	or 002h		        ;8825	f6 02 	
 	ld d,a			;8827	57 	 
-	exx			;8828	d9 	d |= 2 in normal registers 
+	exx			;8828	d9 	D |= 2 (motors on)
 ;; -------- Unknown Card initialization ---------------------------
 l8829h:
 	in a,(071h)		;8829	db 71 	Get BoardId on slot 5
@@ -1671,16 +1673,16 @@ l885bh:
 l8861h:
 	ld a,03dh		;8861	3e 3d 	
 	out (0f8h),a		;8863	d3 f8 	IOCR <- 00111101
-                                                ; xx1xxxxx -> Blank display
-                                                ; xxx1xxxx -> I/O Reset removed
-                                                ; xxxx1xxx -> Acquire mode unset
-                                                ; xxxxx101 -> Command Start disk drive motors
+                                           ; xx1xxxxx -> Blank display
+                                           ; xxx1xxxx -> I/O Reset removed
+                                           ; xxxx1xxx -> Acquire mode unset
+                                           ; xxxxx101 -> Command Start disk drive motors
 	ld b,004h		;8865	06 04 	 
 l8867h:
 	dec a			;8867	3d 	 
 	jr nz,l8867h		;8868	20 fd 	Loop on a 
 	djnz l8867h		;886a	10 fb 	Loop 4 times (256 times a)
-	ld a,038h		;886c	3e 38 	8 
+	ld a,038h		;886c	3e 38 	 
 	out (0f8h),a		;886e	d3 f8 	IOCR <- 00111000 
                                                 ; xx1xxxxx -> Blank display
                                                 ; xxx1xxxx -> Remove I/O reset
@@ -1736,23 +1738,23 @@ l889dh:
 l88a5h:
 	ld a,l			;88a5	7d 	 
 	or h			;88a6	b4 	 
-	jr nz,l889dh		;88a7	20 f4 	Loop through the first mapped RAM page 
+	jr nz,l889dh		;88a7	20 f4 	Loop through the mapped RAM page 
 	ld a,c			;88a9	79 	 
 	or a			;88aa	b7 	 
 	jr z,l88b8h		;88ab	28 0b 	Jump to l88b8h if no memory error 
 	xor a			;88ad	af 	Clear a 
 	scf			;88ae	37 	 
-	ld c,b			;88af	48 	B should hold 4 
+	ld c,b			;88af	48 	B should hold 4, 3, 2, 1 
 l88b0h:
 	rra			;88b0	1f 	Rotate right four times, with carry set 
 	dec c			;88b1	0d 	 
-	jr nz,l88b0h		;88b2	20 fc 	A should be 00010000 -> 0x10
+	jr nz,l88b0h		;88b2	20 fc 	A should be 00010000, 00100000, 01000000, 10000000 (error) or 0 (no error)
 	exx			;88b4	d9 	 
 	or d			;88b5	b2 	 
-	ld d,a			;88b6	57 	d |= 0x10 
+	ld d,a			;88b6	57 	d |= Page with error (High nibble marks memory mismatch  errors)
 	exx			;88b7	d9 	 
 l88b8h:
-	djnz l8884h		;88b8	10 ca 	Repeat for all the 64 kbytes of RAM
+	djnz l8884h		;88b8	10 ca 	Repeat for all the 64 kbytes of RAM (four pages)
 	in a,(060h)		;88ba	db 60 	Read parity error flag (xxxxxxx0) zero means error
 	and 001h		;88bc	e6 01 	
 	exx			;88be	d9 	 
@@ -1779,9 +1781,9 @@ l88d7h:
 	jr c,l88d1h		;88d8	38 f7 	 
 	ld a,003h		;88da	3e 03 	 
 	sub b			;88dc	90 	A contains (3 - position of first zero bit in D) 
-                                                ;Probably RAM page without errors
+                                                ;RAM page without errors or page zero if errors found
 l88ddh:
-	out (0a3h),a		;88dd	d3 a3 	        Sets RAM page 3
+	out (0a3h),a		;88dd	d3 a3 	        Maps best RAM page to page 3  
 	ld (0c002h),a		;88df	32 02 c0 	Store A in 0xC002 (RAM page) 
 	ld a,080h		;88e2	3e 80 	 
 	out (0a0h),a		;88e4	d3 a0 	        Display RAM (first page) to page 1 
@@ -1842,7 +1844,7 @@ l8933h:
 	jr nz,l8941h		;8937	20 08 	        Jump on no parity error 
 	ld a,(0c000h)		;8939	3a 00 c0 	
 	and 0dfh		;893c	e6 df 	        
-	ld (0c000h),a		;893e	32 00 c0 	0xC000 &= 0xDF on parity error  
+	ld (0c000h),a		;893e	32 00 c0 	0xC000 &= 0xDF on parity error (clear bit 5)
 l8941h:
 	ld a,002h		;8941	3e 02 	
 	out (060h),a		;8943	d3 60 	Clear parity errors
@@ -1871,22 +1873,29 @@ l895dh:
 
 sub_8964h:
 	ld a,(002fdh)		;8964	3a fd 02 	: . . 
+
+;; Effect is checked on zero flag
+;; Probably:
+;;      Page errors and no Serial card, Z
+;;      Motors on: Z
+;;      Keyboard data present: NZ
 sub_8967h:
-	or a			;8967	b7 	. 
-	jr nz,l896fh		;8968	20 05 	  . 
-	in a,(031h)		;896a	db 31 	. 1 
-	and 002h		;896c	e6 02 	. . 
-	ret			;896e	c9 	. 
+	or a			;8967	b7 	A holds the selected RAM page 
+	jr nz,l896fh		;8968	20 05 	Zero means maybe parity errors
+	in a,(031h)		;896a	db 31 	What happens if no card is present in slot 3?
+	and 002h		;896c	e6 02 	
+	ret			;896e	c9 	
 l896fh:
-	ld a,(0c001h)		;896f	3a 01 c0 	: . . 
-	and 002h		;8972	e6 02 	. . 
-	jr z,l8978h		;8974	28 02 	( . 
-	xor a			;8976	af 	. 
-	ret			;8977	c9 	. 
+	ld a,(0c001h)		;896f	3a 01 c0 	
+	and 002h		;8972	e6 02 	 0xC001 stores D. Bit 2 set when motors on
+	jr z,l8978h		;8974	28 02 	
+	xor a			;8976	af       Returns zero on this case 
+	ret			;8977	c9 
 l8978h:
-	in a,(0d0h)		;8978	db d0 	. . 
-	and 040h		;897a	e6 40 	. @ 
-	ret			;897c	c9 	. 
+	in a,(0d0h)		;8978	db d0 
+	and 040h		;897a	e6 40 Check x1xxxxxx bit in SR2 (Keyboard data present))
+	ret			;897c	c9 
+
 l897dh:
 	ld b,01eh		;897d	06 1e 	. . 
 	call video_driver_8ad2h		;897f	cd d2 8a 	. . . 
@@ -2116,10 +2125,10 @@ video_driver_8ad2h:
 	ld a,b			;8ad2	78 	 
 	exx			;8ad3	d9 	 
 	ld ix,000f0h		;8ad4	dd 21 f0 00 	IX points to Video Driver RAM block
-	ld hl,l8ae1h		;8ad8	21 e1 8a 	
+	ld hl,video_ret_addr	;8ad8	21 e1 8a 	
 	ld (000f6h),hl		;8adb	22 f6 00        Return address 	
 	jp vdriver		;8ade	c3 14 84        This is the video driver address
-l8ae1h:
+video_ret_addr:
 	exx			;8ae1	d9 
 	ret			;8ae2	c9 
 
@@ -2144,14 +2153,15 @@ serial_get:
 	in a,(030h)		;8af3	db 30 	Get value from USART
 	ret			;8af5	c9 	 
 
-sub_8af6h:
-	ld hl,l814dh		;8af6	21 4d 81 	! M . 
-	ld bc,00331h		;8af9	01 31 03 	. 1 . 
-	otir		;8afc	ed b3 	. . 
+serial_send_hdr:
+	ld hl,serial_data	;8af6	21 4d 81
+	ld bc,00331h		;8af9	01 31 03 
+	otir    		;8afc	ed b3 	  Output 3 bytes on port 0x31
 l8afeh:
-	djnz l8afeh		;8afe	10 fe 	. . 
-	out (038h),a		;8b00	d3 38 	. 8 
-	ret			;8b02	c9 	. 
+	djnz l8afeh		;8afe	10 fe 	Delay
+	out (038h),a		;8b00	d3 38 	Output passed A Value
+	ret			;8b02	c9 	
+
 l8b03h:
 	ld de,0c003h		;8b03	11 03 c0 	. . . 
 	ld c,070h		;8b06	0e 70 	. p 
@@ -2621,11 +2631,11 @@ l8df4h:
 	jp nz,l8c09h		;8df7	c2 09 8c 	. . . 
 	call sub_8b99h		;8dfa	cd 99 8b 	. . . 
 	jr l8df4h		;8dfd	18 f5 	. . 
-	ld hl,l814dh		;8dff	21 4d 81 	! M . 
+	ld hl,serial_data	;8dff	21 4d 81 	! M . 
 	ld c,001h		;8e02	0e 01 	. . 
 	call sub_8edbh		;8e04	cd db 8e 	. . . 
 	ld b,003h		;8e07	06 03 	. . 
-	otir		;8e09	ed b3 	. . 
+	otir		        ;8e09	ed b3 	. . 
 l8e0bh:
 	djnz l8e0bh		;8e0b	10 fe 	. . 
 	ld c,008h		;8e0d	0e 08 	. . 
@@ -2815,7 +2825,7 @@ sub_8f6ah:
 	ld hl,0c433h		;8f72	21 33 c4 	! 3 . 
 	ld b,006h		;8f75	06 06 	. . 
 	ld c,010h		;8f77	0e 10 	. . 
-	otir		;8f79	ed b3 	. . 
+	otir    		;8f79	ed b3 	. . 
 	call sub_8fafh		;8f7b	cd af 8f 	. . . 
 	ld a,00bh		;8f7e	3e 0b 	> . 
 	call sub_8fc6h		;8f80	cd c6 8f 	. . . 
@@ -2879,7 +2889,7 @@ l8fe0h:
 	in a,(070h)		;8fe0	db 70 	Get Board ID in Slot 6
 	xor 0bfh		;8fe2	ee bf 	. . 
 	jr nz,l8fe8h		;8fe4	20 02 	  . 
-	out (006h),a		;8fe6	d3 06 	If BoardID is 0xBF? Unknown
+	out (006h),a		;8fe6	d3 06 	If BoardID is 0xBF? out 0x06,0
 l8fe8h:
 	jp l8800h		;8fe8	c3 00 88 	. . . 
 	nop			;8feb	00 	. 
