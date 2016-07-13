@@ -1,0 +1,89 @@
+4.393760750:	in	0xF1
+; -----------
+4.499326375:	out	0xA0    ;0x800c.  out 0xA2, 0xFC. PROM memory to 0x8000 
+4.499334375:	out	0xF0    ;0x8014.  out 0xF8, 0x28. Blank, show sector 
+5.024763750:	out	0xF0    ;0x8022.  out 0xF8, 0x3F. Toggle all-caps
+
+5.024766500:	in	0xE0    ;0x8024. Check for NMI in 0xE0 & 0x08
+5.024779250:	in	0xE0
+...
+5.075783500:	in	0xE0
+5.075796250:	in	0xE0 ;; Repeated 4000 times (No NMI found)
+
+5.075807750:	out	0xC0    ;0x802f. out 0xC0, 0. Clear NMI status
+5.075810500:	in	0x71    ;0x8031. in 0x73. Read board id 3 (skipped)
+5.075820750:	in	0x81    ;0x8054. in 0x71. Beep
+5.075835875:	in	0x70    ;0x8fe0. Get board id in slot (0xBF?)6
+5.075849875:	in	0xD0    ;0x8804. Read SR2. Fetch commandACK status
+5.075857125:	out	0xF0    ;0x880b. out 0xf8, 0x38. Show sector, blank
+5.075861625:	in	0xD0
+5.075872875:	in	0xD0
+...
+5.076514625:	in	0xD0
+5.076523125:	in	0xD0    ;0x880f. Read SR2, wait commandACK complement (180)
+;; Op: in	0xD0 repeated 60 times
+5.076532375:	in	0x71    ;0x8829. BoardId in slot 5
+5.076541625:	out	0xF0    ;0x8863. out 0xf8, 0x3d. Start disk drive
+5.079873500:	out	0xF0    ;0x886e. out 0xf8, 0x38. Show sector
+5.079878000:	out	0x81    ;0x8872. out 0x81, 0xa1. Control drive
+5.079892000:	out	0x60    ;0x8880. out 8x60, 0x02. Clear parity error flag
+5.079898500:	out	0xA0    ;0x8886. out 0x0a, 3. Map page 3 of RAM to 0x0000
+5.079901250:	out	0x80    ;0x8888. out 0x82, 3. Set disk read flag
+5.276677500:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
+5.500136375:	out	0xA0    ;0x8886. out 0x8a, 2. Map page 2 of RAM to 0x0000
+5.500139125:	out	0x80    ;0x8888. out 0x0a, 2. Set disk read flag
+5.696915375:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
+5.920369375:	out	0xA0    ;0x8886. out 0x0a, 2. Map page 1 of RAM to 0x0000
+5.920372125:	out	0x80    ;0x8888. out 0x82, 2. Set disk read flag
+6.117148375:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
+6.340597375:	out	0xA0    ;0x8886. out 0x8a, 1. Map page 1 of RAM to 0x0000
+6.340600125:	out	0x80    ;0x8888. out 0x82, 1. Set disk read flag
+6.537376375:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
+6.760817125:	in	0x60    ;0x88ba. in 0x60. Read parity error flag
+6.760833625:	out	0x60    ;0x88cb. out 0x60, 0x02. Clear parity error flag (means no parity error?)
+6.760870875:	out	0xA1    ;0x88dd. out 0xa3, a. Maps best page to 0x8000
+6.760878625:	out	0xA0    ;0x88e4. Display RAM page 0 to page 0x0000
+6.760882375:	out	0xA1    ;0x88e7. Display RAM page 1 to page 0x4000
+6.760915375:	in	0xD0    ;0x8978. in 0xd0. Check keyboard data
+                            ;; --- R E S T A R T ---
+                            ;; Interesting ROM Part:
+l88ddh:
+    out (0a3h),a            ;88dd   d3 a3           Maps best RAM page to page 3  
+    ld (0c002h),a           ;88df   32 02 c0        Store A in 0xC002 (RAM page) 
+    ld a,080h               ;88e2   3e 80    
+    out (0a0h),a            ;88e4   d3 a0           Display RAM (first page) to page 1 
+    inc a                   ;88e6   3c       
+    out (0a1h),a            ;88e7   d3 a1           Display RAM (second page) to page 2
+    ld sp,0d000h            ;88e9   31 00 d0        Stack pointer to RAM 0xD000
+    exx                     ;88ec   d9       
+    ld a,d                  ;88ed   7a       
+    ld (0c001h),a           ;88ee   32 01 c0        D to 0xC001
+    ld a,e                  ;88f1   7b       
+    ld (0c000h),a           ;88f2   32 00 c0        E to 0xC000 
+    ld a,b                  ;88f5   78               
+    exx                     ;88f6   d9       
+    call sub_8967h          ;88f7   cd 67 89    ;; Never returns!!
+
+sub_8967h:
+    or a                    ;8967   b7      A holds the selected RAM page 
+    jr nz,l896fh            ;8968   20 05   Zero should mean parity errors
+    in a,(031h)             ;896a   db 31   What happens if no card is present in slot 3?
+    and 002h                ;896c   e6 02   
+    ret                     ;896e   c9      
+l896fh:
+    ld a,(0c001h)           ;896f   3a 01 c0        
+    and 002h                ;8972   e6 02    0xC001 stores D. Bit 2 set when motors on
+    jr z,l8978h             ;8974   28 02   
+    xor a                   ;8976   af       Returns zero on this case 
+    ret                     ;8977   c9 
+                                                                                l8978h:
+    in a,(0d0h)             ;8978   db d0  <-- Seems to execute this 
+    and 040h                ;897a   e6 40 Check x1xxxxxx bit in SR2 (Keyboard data present))
+    ret  <--- Problem here. May be the memory mapped doesn't work
+
+6.770980875:	out	0xA0
+6.770988875:	out	0xF0
+7.296426125:	out	0xF0
+;; Op: out	0xF0 repeated 2 times
+7.296428875:	in	0xE0
+...
