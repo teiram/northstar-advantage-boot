@@ -36,7 +36,7 @@
 5.920369375:	out	0xA0    ;0x8886. out 0x0a, 2. Map page 1 of RAM to 0x0000
 5.920372125:	out	0x80    ;0x8888. out 0x82, 2. Set disk read flag
 6.117148375:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
-6.340597375:	out	0xA0    ;0x8886. out 0x8a, 1. Map page 1 of RAM to 0x0000
+6.340597375:	out	0xA0    ;0x8886. out 0x8a, 1. Map page 0 of RAM to 0x0000
 6.340600125:	out	0x80    ;0x8888. out 0x82, 1. Set disk read flag
 6.537376375:	in	0x80    ;0x8896. in 0x82. Clear disk read flag
 6.760817125:	in	0x60    ;0x88ba. in 0x60. Read parity error flag
